@@ -1,0 +1,81 @@
+{
+  "policy_version": "v1.0",
+  "format": {
+    "default": "BO1",
+    "mulligan": "London",
+    "play_draw": "random",
+    "sideboard": {
+      "game1": "mainboard_only",
+      "game2_plus": "apply_in_out",
+      "sb_contamination": "rebuild_deck_and_redraw"
+    }
+  },
+  "rng_and_deck": {
+    "shuffle": "fisher_yates_per_game",
+    "duplicate_hand_guard": true,
+    "mulligan": "london_procedure"
+  },
+  "land_and_mana": {
+    "land_play": "always_if_possible",
+    "mana_audit": "track_generated_and_spent_per_color",
+    "modifiers": [
+      "chalice_of_the_void",
+      "trinisphere",
+      "blood_moon"
+    ],
+    "double_counting": "forbidden"
+  },
+  "triggers": {
+    "process": "queue_fifo",
+    "token_creatures": "always_trigger",
+    "missed_triggers": "forbidden"
+  },
+  "heuristics": {
+    "general": [
+      "cast_playable_spells_immediately",
+      "if_no_playable_spells_then_use_scry_surveil_selection",
+      "before_lock_effects_resolve_deploy_multiple_low_cost_permanents",
+      "use_resources_that_increase_current_turn_damage",
+      "block_to_minimize_damage_preserve_high_value_threats"
+    ],
+    "lock_and_tax": [
+      "remove_highest_severity_first",
+      "if_unreachable_then_fix_mana_first",
+      "when_multiple_locks_remove_highest_priority_first"
+    ],
+    "mana_engines": [
+      "prioritize_fastest_completion",
+      "search_missing_piece_first",
+      "when_completed_use_excess_for_lock_plus_threat",
+      "delay_stamp_lands_until_stamp_target_available"
+    ],
+    "combat_and_removal": [
+      "maximize_damage_each_turn",
+      "apply_evasion_or_buffs_to_current_damage_source",
+      "removal_variable_cost_use_minimal_x"
+    ]
+  },
+  "logging": {
+    "per_turn": [
+      "draw",
+      "land_play",
+      "cast_spells",
+      "combat_declared_and_assigned",
+      "life_changes_with_reason",
+      "trigger_resolutions",
+      "errors_and_alternatives"
+    ],
+    "pregame": [
+      "sideboard_contamination_check"
+    ]
+  },
+  "error_handling": {
+    "oracle_unresolved": "immediate_abort",
+    "other_inconsistencies": "log_and_continue_with_alternative"
+  },
+  "reinforcement": {
+    "interval_games": 10,
+    "update_strategy": "analyze_recent_logs_and_adjust_weights",
+    "report": "summarize_updates_for_user"
+  }
+}
