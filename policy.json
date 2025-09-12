@@ -1,5 +1,6 @@
 {
-  "policy_version": "v1.0",
+  "policy_version": "v1.1",
+
   "format": {
     "default": "BO1",
     "mulligan": "London",
@@ -10,26 +11,42 @@
       "sb_contamination": "rebuild_deck_and_redraw"
     }
   },
+
   "rng_and_deck": {
     "shuffle": "fisher_yates_per_game",
     "duplicate_hand_guard": true,
     "mulligan": "london_procedure"
   },
+
   "land_and_mana": {
     "land_play": "always_if_possible",
     "mana_audit": "track_generated_and_spent_per_color",
-    "modifiers": [
-      "chalice_of_the_void",
-      "trinisphere",
-      "blood_moon"
-    ],
-    "double_counting": "forbidden"
+    "modifiers": ["chalice_of_the_void", "trinisphere", "blood_moon"],
+    "double_counting": "forbidden",
+
+    "classifiers": {
+      "fetchland_oracle_regex": "(?is)pay\\s*1\\s*life.*sacrifice.*search\\s+your\\s+library.*land",
+      "shockland_oracle_regex": "(?is)as\\s+.*\\s+enters.*you\\s+may\\s+pay\\s*2\\s*life.*if\\s+you\\s+don'?t.*enters\\s+the\\s+battlefield\\s+tapped"
+    },
+    "fetchlands": {
+      "activation_life_payment": "auto_and_log",
+      "log_reason_tag": "fetchland_activation",
+      "split_log_entries": true
+    },
+    "shocklands": {
+      "untap_payment_life": 2,
+      "default_enter": "untapped_if_castable_this_turn",
+      "log_payment": true,
+      "reason_tag": "shockland_untap_payment"
+    }
   },
+
   "triggers": {
     "process": "queue_fifo",
     "token_creatures": "always_trigger",
     "missed_triggers": "forbidden"
   },
+
   "heuristics": {
     "general": [
       "cast_playable_spells_immediately",
@@ -55,6 +72,7 @@
       "removal_variable_cost_use_minimal_x"
     ]
   },
+
   "logging": {
     "per_turn": [
       "draw",
@@ -63,16 +81,56 @@
       "combat_declared_and_assigned",
       "life_changes_with_reason",
       "trigger_resolutions",
-      "errors_and_alternatives"
+      "errors_and_alternatives",
+
+      "activated_abilities",
+      "land_search_and_put",
+      "mode_selection",
+      "x_value_selection"
     ],
-    "pregame": [
-      "sideboard_contamination_check"
-    ]
+    "pregame": ["sideboard_contamination_check"],
+    "life_change_granularity": "atomic"
   },
+
+  "spells": {
+    "modes": {
+      "validate_against_oracle": true,
+      "illegal_mode_behavior": "drop_and_recompute",
+      "targets_must_be_legal": true,
+
+      "parser": {
+        "choose_clause_regex": "(?is)choose\\s+(one|two|one\\s+or\\s+both|any\\s+number)",
+        "mode_bullet_regex": "^\\s*•\\s+"
+      },
+
+      "select_number_of_modes": "from_oracle",
+      "x_cost_policy": "min_for_targets",
+      "x_value_selection": "maximize_value_under_available_mana_when_no_targets",
+
+      "priority": [
+        { "when": "immediate_lethal_or_prevent_lethal", "prefer": ["threat_removal", "token_generation", "combat_trick"] },
+        { "when": "board_parity_or_behind",              "prefer": ["threat_removal", "token_generation", "artifact_enchantment_removal"] },
+        { "when": "board_ahead",                         "prefer": ["card_advantage", "tempo", "graveyard_hate"] },
+        { "when": "opponent_graveyard_matters",          "prefer": ["graveyard_hate", "card_advantage"] }
+      ],
+
+      "taxonomy": {
+        "token_generation": ["create", "token"],
+        "card_advantage":   ["draw", "scry", "impulse"],
+        "threat_removal":   ["destroy", "exile", "sacrifice", "return target permanent to its owner's hand", "counter target"],
+        "artifact_enchantment_removal": ["artifact", "enchantment", "destroy", "exile"],
+        "graveyard_hate":   ["graveyard", "exile", "cards from graveyards"],
+        "combat_trick":     ["until end of turn", "+", "fight"],
+        "tempo":            ["tap", "can't block", "bounce"]
+      }
+    }
+  },
+
   "error_handling": {
     "oracle_unresolved": "immediate_abort",
     "other_inconsistencies": "log_and_continue_with_alternative"
   },
+
   "reinforcement": {
     "interval_games": 10,
     "update_strategy": "analyze_recent_logs_and_adjust_weights",
