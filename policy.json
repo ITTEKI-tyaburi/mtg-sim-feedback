@@ -1,5 +1,14 @@
 {
-  "policy_version": "v1.1",
+  "policy_version": "v1.2",
+
+  "meta": {
+    "principles": [
+      "All policies must be expressed in general terms, not tied to specific card names.",
+      "Policies are defined mechanics-first (e.g. Evoke, Pitch Cast, Blink), not card-specific.",
+      "Card-specific exceptions are only allowed under extraordinary errata conditions.",
+      "Simulation outputs must always include the complete and current policy.json after any modification."
+    ]
+  },
 
   "format": {
     "default": "BO1",
@@ -21,7 +30,7 @@
   "land_and_mana": {
     "land_play": "always_if_possible",
     "mana_audit": "track_generated_and_spent_per_color",
-    "modifiers": ["chalice_of_the_void", "trinisphere", "blood_moon"],
+    "modifiers": ["lock_effect", "tax_effect", "mana_conversion_effect"],
     "double_counting": "forbidden",
 
     "classifiers": {
@@ -47,6 +56,33 @@
     "missed_triggers": "forbidden"
   },
 
+  "rules": {
+    "alternative_costs": {
+      "scope": "mechanics",
+      "common": {
+        "require_pitch_colors": true,
+        "pitch_zone_transition": "hand_to_exile",
+        "self_pitch_forbidden": true
+      },
+      "evoke": {
+        "inherits": "common"
+      },
+      "pitch_cast": {
+        "inherits": "common"
+      }
+    },
+    "timing": {
+      "scope": "mechanics",
+      "blink_on_evoke_window": "only_after_etb_before_sacrifice",
+      "illegal_target_handling": "deny_and_log"
+    },
+    "state_based_actions": {
+      "scope": "mechanics",
+      "damage_and_toughness": "destroy_if_damage_marked >= current_toughness",
+      "reset_marks_timing": "cleanup_end_step"
+    }
+  },
+
   "heuristics": {
     "general": [
       "cast_playable_spells_immediately",
@@ -69,7 +105,10 @@
     "combat_and_removal": [
       "maximize_damage_each_turn",
       "apply_evasion_or_buffs_to_current_damage_source",
-      "removal_variable_cost_use_minimal_x"
+      "removal_variable_cost_use_minimal_x",
+      "avoid_precombat_removal_if_blocker_dies_in_combat_without_trample",
+      "allow_precombat_removal_if_trample_increases_face_damage_or_lethal",
+      "if_no_legal_cast_then_prefer_tapland_then_pass"
     ]
   },
 
@@ -82,14 +121,22 @@
       "life_changes_with_reason",
       "trigger_resolutions",
       "errors_and_alternatives",
-
       "activated_abilities",
       "land_search_and_put",
       "mode_selection",
       "x_value_selection"
     ],
     "pregame": ["sideboard_contamination_check"],
-    "life_change_granularity": "atomic"
+    "life_change_granularity": "atomic",
+    "illegal_action": [
+      "alternative_cost_color_mismatch",
+      "zone_transition_error",
+      "blink_target_not_on_battlefield"
+    ],
+    "warnings": [
+      "nonlethal_removal_cast",
+      "redundant_cast_with_no_effect"
+    ]
   },
 
   "spells": {
