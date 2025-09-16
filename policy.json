@@ -177,7 +177,21 @@
     "oracle_unresolved": "immediate_abort",
     "other_inconsistencies": "log_and_continue_with_alternative"
   },
-
+　"deck_article_reference": {
+    "enabled": true,
+    "trigger": "on_decklist_received",
+    "action": "search_and_fetch",
+    "sources": [
+      "https://www.mtggoldfish.com",
+      "https://mtgdecktech.com",
+      "https://strategy.article.example",
+      "https://mtg-jp.com",
+      "https://teamcxmtg.com",
+      "https://hareruya.hatenablog.jp"
+    ],
+    "integration": "use_article_for_strategy_guidance",
+    "language_preference": ["ja", "en"]
+ },
   "reinforcement": {
     "interval_games": 10,
     "update_strategy": "analyze_recent_logs_and_adjust_weights",
