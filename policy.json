@@ -1,12 +1,13 @@
 {
-  "policy_version": "v1.2",
+  "policy_version": "v1.3-integrated",
 
   "meta": {
     "principles": [
       "All policies must be expressed in general terms, not tied to specific card names.",
       "Policies are defined mechanics-first (e.g. Evoke, Pitch Cast, Blink), not card-specific.",
       "Card-specific exceptions are only allowed under extraordinary errata conditions.",
-      "Simulation outputs must always include the complete and current policy.json after any modification."
+      "Simulation outputs must always include the complete and current policy.json after any modification.",
+      "Displayed match samples must be selected uniformly at random from the batch (no presentation bias)."
     ]
   },
 
@@ -24,7 +25,12 @@
   "rng_and_deck": {
     "shuffle": "fisher_yates_per_game",
     "duplicate_hand_guard": true,
-    "mulligan": "london_procedure"
+    "mulligan": "london_procedure",
+    "output_sampling": {
+      "mode": "uniform_random",
+      "dedup": false,
+      "notes": "No filtering by hand quality or composition; presentation is unbiased."
+    }
   },
 
   "land_and_mana": {
@@ -32,6 +38,26 @@
     "mana_audit": "track_generated_and_spent_per_color",
     "modifiers": ["lock_effect", "tax_effect", "mana_conversion_effect"],
     "double_counting": "forbidden",
+
+    "etb_tapped_sources_unavailable_same_turn": true,
+    "tap_ledger": "enforced_once_per_source_per_turn",
+    "floating_mana_pool": "tracked_until_step_ends",
+
+    "conditional_mana": {
+      "enforce_restriction_on_spend": true,
+      "examples": [
+        "Mana that can be spent only on spells of a class/type/supertype.",
+        "Mana that can be spent only to cast creature spells.",
+        "Mana that can be spent only on costs containing {C} (colorless)."
+      ],
+      "on_violation": "deny_and_log"
+    },
+
+    "tax_and_lock": {
+      "minimum_cost_floor": true,
+      "stacking_behavior": "additive",
+      "satisfied_before_payment": true
+    },
 
     "classifiers": {
       "fetchland_oracle_regex": "(?is)pay\\s*1\\s*life.*sacrifice.*search\\s+your\\s+library.*land",
@@ -53,7 +79,11 @@
   "triggers": {
     "process": "queue_fifo",
     "token_creatures": "always_trigger",
-    "missed_triggers": "forbidden"
+    "missed_triggers": "forbidden",
+    "oracle_binding": {
+      "token_pt_abilities_from_oracle": true,
+      "hand_size_attack_limiters": true
+    }
   },
 
   "rules": {
@@ -80,6 +110,11 @@
       "scope": "mechanics",
       "damage_and_toughness": "destroy_if_damage_marked >= current_toughness",
       "reset_marks_timing": "cleanup_end_step"
+    },
+    "combat_core": {
+      "summoning_sickness_on_creatures_and_tokens": true,
+      "hand_size_based_attack_restrictions": "enforce_when_present",
+      "declare_blocks_rule": "defender_may_assign_only_legal_blocks"
     }
   },
 
@@ -108,7 +143,9 @@
       "removal_variable_cost_use_minimal_x",
       "avoid_precombat_removal_if_blocker_dies_in_combat_without_trample",
       "allow_precombat_removal_if_trample_increases_face_damage_or_lethal",
-      "if_no_legal_cast_then_prefer_tapland_then_pass"
+      "if_no_legal_cast_then_prefer_tapland_then_pass",
+      "no_free_damage_blocking", 
+      "attacker_expectation_nonnegative"
     ]
   },
 
@@ -124,19 +161,26 @@
       "activated_abilities",
       "land_search_and_put",
       "mode_selection",
-      "x_value_selection"
+      "x_value_selection",
+      "mana_payment_breakdown"
     ],
     "pregame": ["sideboard_contamination_check"],
     "life_change_granularity": "atomic",
     "illegal_action": [
       "alternative_cost_color_mismatch",
       "zone_transition_error",
-      "blink_target_not_on_battlefield"
+      "blink_target_not_on_battlefield",
+      "conditional_mana_misuse",
+      "double_tap_payment"
     ],
     "warnings": [
       "nonlethal_removal_cast",
       "redundant_cast_with_no_effect"
-    ]
+    ],
+    "completeness_guards": {
+      "draw_step_completeness": true,
+      "oracle_token_binding": true
+    }
   },
 
   "spells": {
@@ -169,6 +213,39 @@
         "graveyard_hate":   ["graveyard", "exile", "cards from graveyards"],
         "combat_trick":     ["until end of turn", "+", "fight"],
         "tempo":            ["tap", "can't block", "bounce"]
+      },
+
+      "pre_output_gate": {
+        "enabled": true,
+        "report_mode": "violations_only",
+        "checks": {
+          "mana": [
+            "colored_pips_satisfied",
+            "colorless_pips_{C}_satisfied",
+            "conditional_mana_use_valid",
+            "etb_tapped_sources_unavailable_same_turn",
+            "tax_floor_respected",
+            "single_use_per_tap_source",
+            "payment_breakdown_consistency"
+          ],
+          "combat": [
+            "no_summoning_sickness_attack",
+            "hand_size_attack_limiters_enforced",
+            "legal_blocks_only",
+            "no_free_damage_blocking",
+            "attacker_expectation_nonnegative",
+            "block_selection_min_damage_or_favorable_trade"
+          ],
+          "triggers": [
+            "token_pt_abilities_from_oracle_bound",
+            "missed_triggers_forbidden"
+          ],
+          "logging": [
+            "draw_step_logged",
+            "life_recompute_on_patch"
+          ]
+        },
+        "on_failure": "block_and_emit_violation_with_corrected_action"
       }
     }
   },
@@ -177,7 +254,7 @@
     "oracle_unresolved": "immediate_abort",
     "other_inconsistencies": "log_and_continue_with_alternative"
   },
-　"deck_article_reference": {
+ "deck_article_reference": {
     "enabled": true,
     "trigger": "on_decklist_received",
     "action": "search_and_fetch",
@@ -191,7 +268,7 @@
     ],
     "integration": "use_article_for_strategy_guidance",
     "language_preference": ["ja", "en"]
- },
+  },
   "reinforcement": {
     "interval_games": 10,
     "update_strategy": "analyze_recent_logs_and_adjust_weights",
