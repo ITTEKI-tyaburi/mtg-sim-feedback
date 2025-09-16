@@ -1,277 +1,221 @@
 {
-  "policy_version": "v1.3-integrated",
-
-  "meta": {
-    "principles": [
-      "All policies must be expressed in general terms, not tied to specific card names.",
-      "Policies are defined mechanics-first (e.g. Evoke, Pitch Cast, Blink), not card-specific.",
-      "Card-specific exceptions are only allowed under extraordinary errata conditions.",
-      "Simulation outputs must always include the complete and current policy.json after any modification.",
-      "Displayed match samples must be selected uniformly at random from the batch (no presentation bias)."
-    ]
-  },
-
+  "policy_version": "v1.4",
+  "policy_name": "mtg-sim-integrated",
+  "policy_revision": "2025-09-16",
+  "created_at": "2025-09-16T00:00:00Z",
+  "locale": "ja-JP",
   "format": {
-    "default": "BO1",
+    "game": "Magic: The Gathering",
+    "ruleset": "Modern",
+    "match_mode": "BO1",
     "mulligan": "London",
-    "play_draw": "random",
-    "sideboard": {
-      "game1": "mainboard_only",
-      "game2_plus": "apply_in_out",
-      "sb_contamination": "rebuild_deck_and_redraw"
+    "turn_order": "random",
+    "sideboarding": {
+      "allowed": false,
+      "exceptions": [
+        { "card": "Karn, the Great Creator", "ability": "-2", "allow_wish": true }
+      ]
     }
   },
-
-  "rng_and_deck": {
-    "shuffle": "fisher_yates_per_game",
-    "duplicate_hand_guard": true,
-    "mulligan": "london_procedure",
-    "output_sampling": {
-      "mode": "uniform_random",
-      "dedup": false,
-      "notes": "No filtering by hand quality or composition; presentation is unbiased."
-    }
+  "oracle": {
+    "source_priority": ["scryfall", "gatherer"],
+    "fatal_on_unresolved": true
   },
-
-  "land_and_mana": {
-    "land_play": "always_if_possible",
-    "mana_audit": "track_generated_and_spent_per_color",
-    "modifiers": ["lock_effect", "tax_effect", "mana_conversion_effect"],
-    "double_counting": "forbidden",
-
-    "etb_tapped_sources_unavailable_same_turn": true,
-    "tap_ledger": "enforced_once_per_source_per_turn",
-    "floating_mana_pool": "tracked_until_step_ends",
-
-    "conditional_mana": {
-      "enforce_restriction_on_spend": true,
-      "examples": [
-        "Mana that can be spent only on spells of a class/type/supertype.",
-        "Mana that can be spent only to cast creature spells.",
-        "Mana that can be spent only on costs containing {C} (colorless)."
-      ],
-      "on_violation": "deny_and_log"
-    },
-
-    "tax_and_lock": {
-      "minimum_cost_floor": true,
-      "stacking_behavior": "additive",
-      "satisfied_before_payment": true
-    },
-
-    "classifiers": {
-      "fetchland_oracle_regex": "(?is)pay\\s*1\\s*life.*sacrifice.*search\\s+your\\s+library.*land",
-      "shockland_oracle_regex": "(?is)as\\s+.*\\s+enters.*you\\s+may\\s+pay\\s*2\\s*life.*if\\s+you\\s+don'?t.*enters\\s+the\\s+battlefield\\s+tapped"
-    },
-    "fetchlands": {
-      "activation_life_payment": "auto_and_log",
-      "log_reason_tag": "fetchland_activation",
-      "split_log_entries": true
-    },
-    "shocklands": {
-      "untap_payment_life": 2,
-      "default_enter": "untapped_if_castable_this_turn",
-      "log_payment": true,
-      "reason_tag": "shockland_untap_payment"
-    }
-  },
-
-  "triggers": {
-    "process": "queue_fifo",
-    "token_creatures": "always_trigger",
-    "missed_triggers": "forbidden",
-    "oracle_binding": {
-      "token_pt_abilities_from_oracle": true,
-      "hand_size_attack_limiters": true
-    }
-  },
-
-  "rules": {
-    "alternative_costs": {
-      "scope": "mechanics",
-      "common": {
-        "require_pitch_colors": true,
-        "pitch_zone_transition": "hand_to_exile",
-        "self_pitch_forbidden": true
+  "engine": {
+    "pregame": {
+      "public_reveal": {
+        "enable": true,
+        "cards": {
+          "Devourer of Destiny": {
+            "action": "reveal_in_opening_hand",
+            "timing": "game_start_before_draw",
+            "resolution": {
+              "look_at_top": 4,
+              "put_on_top": 1,
+              "exile_rest": true,
+              "randomize_top_if_multiple": false
+            }
+          }
+        }
       },
-      "evoke": {
-        "inherits": "common"
-      },
-      "pitch_cast": {
-        "inherits": "common"
+      "draw_safeguards": {
+        "fix_going_second_turn1_draw": true,
+        "protect_draw_after_fetchland": true,
+        "avoid_over_suppressing_duplicate_lands": true
       }
     },
-    "timing": {
-      "scope": "mechanics",
-      "blink_on_evoke_window": "only_after_etb_before_sacrifice",
-      "illegal_target_handling": "deny_and_log"
+    "mulligan_policy": {
+      "type": "london",
+      "keep_heuristics": {
+        "DeckA": {
+          "min_lands": 2,
+          "must_include_one_of": [["Ragavan, Nimble Pilferer", "Guide of Souls"], ["Ocelot Pride", "Static Prison", "Galvanic Discharge"]]
+        },
+        "DeckB": {
+          "prefer_lines": ["T2 Thought-Knot Seer via Labyrinth+Temple", "T3 Karn via Tron or Temple ramp"]
+        }
+      }
     },
-    "state_based_actions": {
-      "scope": "mechanics",
-      "damage_and_toughness": "destroy_if_damage_marked >= current_toughness",
-      "reset_marks_timing": "cleanup_end_step"
+    "casting": {
+      "cost_determination_order": [
+        "base_cost",
+        "alternative_cost",
+        "additional_costs",
+        "cost_increases",
+        "cost_reductions",
+        "special_requirements",
+        "apply_trinisphere_floor"
+      ]
     },
-    "combat_core": {
-      "summoning_sickness_on_creatures_and_tokens": true,
-      "hand_size_based_attack_restrictions": "enforce_when_present",
-      "declare_blocks_rule": "defender_may_assign_only_legal_blocks"
+    "mana": {
+      "tap_ledger": {
+        "single_use_per_source_per_turn": true,
+        "cip_tapped_unusable_this_turn": true,
+        "non_mana_permanent_is_not_source": true
+      },
+      "floating_mana": {
+        "clear_on_step_change": true,
+        "clear_on_phase_change": true
+      },
+      "color_and_c": {
+        "enforce_colored_pips": true,
+        "enforce_colorless_c": true
+      },
+      "cost_modifiers": {
+        "trinisphere": {
+          "enforce_minimum_three_after_all_modifiers": true,
+          "scope": "spells_only",
+          "floor_value": 3
+        },
+        "phyrexian": {
+          "life_payment_allowed": true,
+          "generic_mana_required_first": true,
+          "cards": {
+            "Dismember": { "generic_required": 1, "life_payment": 4 }
+          }
+        }
+      }
+    },
+    "karn_wish": {
+      "allow_sideboard_tutor": true,
+      "priority": [
+        { "condition": "opponent_battlefield_developed", "card": "Ensnaring Bridge" },
+        { "condition": "phlage_escape_close", "card": "Tormod's Crypt" },
+        { "condition": "else", "card": "Trinisphere" }
+      ],
+      "ignore_candidates": ["Chalice of the Void"]
+    },
+    "combat": {
+      "attack_selection": {
+        "prioritize_planeswalker_if_threat_next_turn": true,
+        "threat_metric": {
+          "karn_minus_two_available": 1.0,
+          "bridge_lock_probability": 1.0
+        },
+        "evaluate_non_attack": true,
+        "evaluation_weights": { "present_damage": 0.6, "future_value": 0.4 }
+      },
+      "block_selection": {
+        "prefer_profitable_trades": true,
+        "prevent_lethal": true,
+        "respect_first_strike_and_damage_order": true
+      }
+    },
+    "mechanics": {
+      "track_energy": true
+    },
+    "error_handling": {
+      "on_illegal_action": {
+        "action": "replace_with_legal_alternative",
+        "log": "error_and_alternative",
+        "prefix": "失敗→代替行動"
+      }
+    },
+    "pre_output_gate": {
+      "enabled": true,
+      "validators": [
+        "mana_payment_consistency",
+        "turn_mana_arithmetic",
+        "cost_floor_trinisphere",
+        "tap_ledger_consistency",
+        "cip_tapped_usage_check",
+        "color_pips_satisfied",
+        "colorless_c_satisfied",
+        "float_mana_nonnegative",
+        "life_payment_accounted",
+        "shock_fetch_life_adjustment",
+        "casting_window_legality",
+        "combat_legality",
+        "pw_loyalty_math"
+      ],
+      "on_failure": {
+        "action": "replace_with_legal_alternative",
+        "log": "error_and_alternative",
+        "prefix": "失敗→代替行動"
+      }
+    },
+    "logging": {
+      "include": [
+        "initial_hand",
+        "draws",
+        "lands_played",
+        "spells_cast",
+        "combat",
+        "life_changes",
+        "errors",
+        "energy_counters"
+      ],
+      "life_change_reasons": true
+    },
+    "heuristics_update": {
+      "frequency_games": 10,
+      "adjustments": [
+        { "name": "tks_exile_priority", "increase_targets": ["Static Prison"], "decrease_targets": ["Goblin Bombardment"] },
+        { "name": "ragavan_preemptive_removal", "enable": true },
+        { "name": "discharge_alloc_to_pw", "enable": true }
+      ]
     }
   },
-
-  "heuristics": {
-    "general": [
-      "cast_playable_spells_immediately",
-      "if_no_playable_spells_then_use_scry_surveil_selection",
-      "before_lock_effects_resolve_deploy_multiple_low_cost_permanents",
-      "use_resources_that_increase_current_turn_damage",
-      "block_to_minimize_damage_preserve_high_value_threats"
-    ],
-    "lock_and_tax": [
-      "remove_highest_severity_first",
-      "if_unreachable_then_fix_mana_first",
-      "when_multiple_locks_remove_highest_priority_first"
-    ],
-    "mana_engines": [
-      "prioritize_fastest_completion",
-      "search_missing_piece_first",
-      "when_completed_use_excess_for_lock_plus_threat",
-      "delay_stamp_lands_until_stamp_target_available"
-    ],
-    "combat_and_removal": [
-      "maximize_damage_each_turn",
-      "apply_evasion_or_buffs_to_current_damage_source",
-      "removal_variable_cost_use_minimal_x",
-      "avoid_precombat_removal_if_blocker_dies_in_combat_without_trample",
-      "allow_precombat_removal_if_trample_increases_face_damage_or_lethal",
-      "if_no_legal_cast_then_prefer_tapland_then_pass",
-      "no_free_damage_blocking", 
-      "attacker_expectation_nonnegative"
+  "tests": {
+    "scenarios": [
+      {
+        "name": "Tron → Karn → Trinisphere same turn; Relic blocked",
+        "battlefield": {
+          "you": {"lands": ["Urza's Mine", "Urza's Power Plant", "Urza's Tower"], "artifacts": []},
+          "opponent": {"battlefield": []}
+        },
+        "hand": {"you": ["Karn, the Great Creator", "Relic of Progenitus"]},
+        "library": {"you": ["Trinisphere"]},
+        "assert": [
+          {"type": "cast", "card": "Karn, the Great Creator", "legal": true, "pay": "{4}"},
+          {"type": "tutor", "card": "Trinisphere"},
+          {"type": "cast", "card": "Trinisphere", "legal": true, "pay": "{3}"},
+          {"type": "cast", "card": "Relic of Progenitus", "legal": false, "reason": "insufficient_mana_after_spending"}
+        ]
+      },
+      {
+        "name": "Devourer under Tron; cast trigger",
+        "hand": {"you": ["Devourer of Destiny"]},
+        "battlefield": {"you": {"lands": ["Urza's Mine", "Urza's Power Plant", "Urza's Tower"], "artifacts": ["Trinisphere"]}},
+        "assert": [
+          {"type": "cast", "card": "Devourer of Destiny", "legal": true, "pay": "{7}"},
+          {"type": "trigger", "source": "Devourer of Destiny", "trigger": "cast", "effect": "exile target colored permanent"}
+        ]
+      },
+      {
+        "name": "Dismember requires {1} + 4 life",
+        "battlefield": {"you": {"lands": ["Forest"], "life": 10}},
+        "hand": {"you": ["Dismember"]},
+        "assert": [
+          {"type": "cast", "card": "Dismember", "legal": true, "pay": "{1}+4life"}
+        ]
+      }
     ]
   },
-
-  "logging": {
-    "per_turn": [
-      "draw",
-      "land_play",
-      "cast_spells",
-      "combat_declared_and_assigned",
-      "life_changes_with_reason",
-      "trigger_resolutions",
-      "errors_and_alternatives",
-      "activated_abilities",
-      "land_search_and_put",
-      "mode_selection",
-      "x_value_selection",
-      "mana_payment_breakdown"
-    ],
-    "pregame": ["sideboard_contamination_check"],
-    "life_change_granularity": "atomic",
-    "illegal_action": [
-      "alternative_cost_color_mismatch",
-      "zone_transition_error",
-      "blink_target_not_on_battlefield",
-      "conditional_mana_misuse",
-      "double_tap_payment"
-    ],
-    "warnings": [
-      "nonlethal_removal_cast",
-      "redundant_cast_with_no_effect"
-    ],
-    "completeness_guards": {
-      "draw_step_completeness": true,
-      "oracle_token_binding": true
+  "changelog": [
+    {
+      "rev": "2025-09-16",
+      "summary": "Trinisphere下限の厳格化、タップ帳と浮きマナ消去、Devourerのプリゲーム公開、Karnの-2優先ロジック、PW優先アタック、出力前ゲート強化。"
     }
-  },
-
-  "spells": {
-    "modes": {
-      "validate_against_oracle": true,
-      "illegal_mode_behavior": "drop_and_recompute",
-      "targets_must_be_legal": true,
-
-      "parser": {
-        "choose_clause_regex": "(?is)choose\\s+(one|two|one\\s+or\\s+both|any\\s+number)",
-        "mode_bullet_regex": "^\\s*•\\s+"
-      },
-
-      "select_number_of_modes": "from_oracle",
-      "x_cost_policy": "min_for_targets",
-      "x_value_selection": "maximize_value_under_available_mana_when_no_targets",
-
-      "priority": [
-        { "when": "immediate_lethal_or_prevent_lethal", "prefer": ["threat_removal", "token_generation", "combat_trick"] },
-        { "when": "board_parity_or_behind",              "prefer": ["threat_removal", "token_generation", "artifact_enchantment_removal"] },
-        { "when": "board_ahead",                         "prefer": ["card_advantage", "tempo", "graveyard_hate"] },
-        { "when": "opponent_graveyard_matters",          "prefer": ["graveyard_hate", "card_advantage"] }
-      ],
-
-      "taxonomy": {
-        "token_generation": ["create", "token"],
-        "card_advantage":   ["draw", "scry", "impulse"],
-        "threat_removal":   ["destroy", "exile", "sacrifice", "return target permanent to its owner's hand", "counter target"],
-        "artifact_enchantment_removal": ["artifact", "enchantment", "destroy", "exile"],
-        "graveyard_hate":   ["graveyard", "exile", "cards from graveyards"],
-        "combat_trick":     ["until end of turn", "+", "fight"],
-        "tempo":            ["tap", "can't block", "bounce"]
-      },
-
-      "pre_output_gate": {
-        "enabled": true,
-        "report_mode": "violations_only",
-        "checks": {
-          "mana": [
-            "colored_pips_satisfied",
-            "colorless_pips_{C}_satisfied",
-            "conditional_mana_use_valid",
-            "etb_tapped_sources_unavailable_same_turn",
-            "tax_floor_respected",
-            "single_use_per_tap_source",
-            "payment_breakdown_consistency"
-          ],
-          "combat": [
-            "no_summoning_sickness_attack",
-            "hand_size_attack_limiters_enforced",
-            "legal_blocks_only",
-            "no_free_damage_blocking",
-            "attacker_expectation_nonnegative",
-            "block_selection_min_damage_or_favorable_trade"
-          ],
-          "triggers": [
-            "token_pt_abilities_from_oracle_bound",
-            "missed_triggers_forbidden"
-          ],
-          "logging": [
-            "draw_step_logged",
-            "life_recompute_on_patch"
-          ]
-        },
-        "on_failure": "block_and_emit_violation_with_corrected_action"
-      }
-    }
-  },
-
-  "error_handling": {
-    "oracle_unresolved": "immediate_abort",
-    "other_inconsistencies": "log_and_continue_with_alternative"
-  },
- "deck_article_reference": {
-    "enabled": true,
-    "trigger": "on_decklist_received",
-    "action": "search_and_fetch",
-    "sources": [
-      "https://www.mtggoldfish.com",
-      "https://mtgdecktech.com",
-      "https://strategy.article.example",
-      "https://mtg-jp.com",
-      "https://teamcxmtg.com",
-      "https://hareruya.hatenablog.jp"
-    ],
-    "integration": "use_article_for_strategy_guidance",
-    "language_preference": ["ja", "en"]
-  },
-  "reinforcement": {
-    "interval_games": 10,
-    "update_strategy": "analyze_recent_logs_and_adjust_weights",
-    "report": "summarize_updates_for_user"
-  }
+  ]
 }
