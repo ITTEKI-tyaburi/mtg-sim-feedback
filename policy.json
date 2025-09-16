@@ -1,7 +1,7 @@
 {
-  "policy_version": "v1.4",
+  "policy_version": "v1.4.1",
   "policy_name": "mtg-sim-integrated",
-  "policy_revision": "2025-09-16",
+  "policy_revision": "2025-09-16-a1",
   "created_at": "2025-09-16T00:00:00Z",
   "locale": "ja-JP",
   "format": {
@@ -107,13 +107,33 @@
     },
     "combat": {
       "attack_selection": {
-        "prioritize_planeswalker_if_threat_next_turn": true,
-        "threat_metric": {
-          "karn_minus_two_available": 1.0,
-          "bridge_lock_probability": 1.0
+        "valid_attacker_detection": {
+          "must_enumerate_all_eligible": true,
+          "exclude_summoning_sick": true,
+          "exclude_tapped": true,
+          "respect_attack_restrictions": true,
+          "respect_defender_specific_rules": true
         },
         "evaluate_non_attack": true,
-        "evaluation_weights": { "present_damage": 0.6, "future_value": 0.4 }
+        "evaluation_weights": { "present_damage": 0.55, "future_value": 0.45 },
+        "target_scoring": {
+          "modes": ["planeswalker", "player"],
+          "planeswalker_priority": {
+            "enable": true,
+            "next_turn_threat_metric": {
+              "karn_minus_two_available": 1.0,
+              "bridge_lock_probability": 1.0
+            },
+            "ability_thresholds": {
+              "Karn, the Great Creator": { "minus2_required_loyalty": 2 }
+            },
+            "disable_logic": {
+              "prefer_disable_over_damage": true,
+              "score_bonus_if_loyalty_after_attack_below_required": 0.5,
+              "score_bonus_if_kill": 1.0
+            }
+          }
+        }
       },
       "block_selection": {
         "prefer_profitable_trades": true,
@@ -146,12 +166,17 @@
         "shock_fetch_life_adjustment",
         "casting_window_legality",
         "combat_legality",
+        "unused_attacker_informational",
         "pw_loyalty_math"
       ],
       "on_failure": {
         "action": "replace_with_legal_alternative",
         "log": "error_and_alternative",
         "prefix": "失敗→代替行動"
+      },
+      "on_warning": {
+        "log": "informational",
+        "include": ["unused_attacker_informational"]
       }
     },
     "logging": {
@@ -163,6 +188,7 @@
         "combat",
         "life_changes",
         "errors",
+        "warnings",
         "energy_counters"
       ],
       "life_change_reasons": true
@@ -172,7 +198,8 @@
       "adjustments": [
         { "name": "tks_exile_priority", "increase_targets": ["Static Prison"], "decrease_targets": ["Goblin Bombardment"] },
         { "name": "ragavan_preemptive_removal", "enable": true },
-        { "name": "discharge_alloc_to_pw", "enable": true }
+        { "name": "discharge_alloc_to_pw", "enable": true },
+        { "name": "pw_attack_priority_microfix", "details": "Reduce Karn below -2 threshold when possible; else evaluate EV of player damage" }
       ]
     }
   },
@@ -180,10 +207,7 @@
     "scenarios": [
       {
         "name": "Tron → Karn → Trinisphere same turn; Relic blocked",
-        "battlefield": {
-          "you": {"lands": ["Urza's Mine", "Urza's Power Plant", "Urza's Tower"], "artifacts": []},
-          "opponent": {"battlefield": []}
-        },
+        "battlefield": {"you": {"lands": ["Urza's Mine", "Urza's Power Plant", "Urza's Tower"], "artifacts": []}},
         "hand": {"you": ["Karn, the Great Creator", "Relic of Progenitus"]},
         "library": {"you": ["Trinisphere"]},
         "assert": [
@@ -209,13 +233,34 @@
         "assert": [
           {"type": "cast", "card": "Dismember", "legal": true, "pay": "{1}+4life"}
         ]
+      },
+      {
+        "name": "Unused attacker warning when non-attack chosen",
+        "battlefield": {
+          "you": {"creatures": [{"name": "Guide of Souls", "power": 1, "tapped": false, "summoning_sick": false}]},
+          "opponent": {"planeswalkers": [{"name": "Karn, the Great Creator", "loyalty": 3}]}
+        },
+        "declare": {"attack": "none"},
+        "assert": [
+          {"type": "warning", "code": "unused_attacker_informational"}
+        ]
+      },
+      {
+        "name": "PW priority microfix: attack reduces below threshold",
+        "battlefield": {
+          "you": {"creatures": [{"name": "Guide of Souls", "power": 2, "tapped": false, "summoning_sick": false}]},
+          "opponent": {"planeswalkers": [{"name": "Karn, the Great Creator", "loyalty": 2}]}
+        },
+        "assert": [
+          {"type": "attack_target", "target": "Karn, the Great Creator"}
+        ]
       }
     ]
   },
   "changelog": [
     {
-      "rev": "2025-09-16",
-      "summary": "Trinisphere下限の厳格化、タップ帳と浮きマナ消去、Devourerのプリゲーム公開、Karnの-2優先ロジック、PW優先アタック、出力前ゲート強化。"
+      "rev": "2025-09-16-a1",
+      "summary": "有効アタッカー列挙と未使用アタッカーの警告、PW優先規則に閾値（Karn -2=忠誠2）を導入。出力前ゲートにunused_attacker_informationalを追加。"
     }
   ]
 }
